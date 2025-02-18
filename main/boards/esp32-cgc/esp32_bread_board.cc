@@ -17,7 +17,7 @@
 #include <esp_lcd_st7735.h>
 
 
-#define TAG "esp32-wroom-st7735"
+#define TAG "esp32-cgc"
 
 LV_FONT_DECLARE(font_puhui_14_1);
 LV_FONT_DECLARE(font_awesome_14_1);
