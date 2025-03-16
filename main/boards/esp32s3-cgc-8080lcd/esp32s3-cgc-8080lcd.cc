@@ -17,7 +17,6 @@
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 
-#include <driver/rtc_io.h>
 #include <esp_sleep.h>
 
 #define TAG "ESP32S3_CGC_8080LCD"
@@ -49,11 +48,7 @@ private:
     }
 
     void InitializePowerSaveTimer() {
-        rtc_gpio_init(GPIO_NUM_40);
-        rtc_gpio_set_direction(GPIO_NUM_40, RTC_GPIO_MODE_OUTPUT_ONLY);
-        rtc_gpio_set_level(GPIO_NUM_40, 1);
-
-        power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
+        power_save_timer_ = new PowerSaveTimer(-1, 60);
         power_save_timer_->OnEnterSleepMode([this]() {
             ESP_LOGI(TAG, "Enabling sleep mode");
             display_->SetChatMessage("system", "");
@@ -64,14 +59,6 @@ private:
             display_->SetChatMessage("system", "");
             display_->SetEmotion("neutral");
             GetBacklight()->RestoreBrightness();
-        });
-        power_save_timer_->OnShutdownRequest([this]() {
-            ESP_LOGI(TAG, "Shutting down");
-            rtc_gpio_set_level(GPIO_NUM_40, 0);
-            // 启用保持功能，确保睡眠期间电平不变
-            rtc_gpio_hold_en(GPIO_NUM_40);
-            esp_lcd_panel_disp_on_off(panel, false); //关闭显示
-            esp_deep_sleep_start();
         });
         power_save_timer_->SetEnabled(true);
     }
