@@ -17,6 +17,8 @@
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <driver/spi_common.h>
+#include <driver/rtc_io.h>
+#include <esp_sleep.h>
  
 #define TAG "ESP32_CGC_144"
 
@@ -44,6 +46,33 @@ private:
         });
     }
 
+    void InitializePowerSaveTimer() {
+        rtc_gpio_init(GPIO_NUM_13);
+        rtc_gpio_set_direction(GPIO_NUM_13, RTC_GPIO_MODE_OUTPUT_ONLY);
+        rtc_gpio_set_level(GPIO_NUM_13, 1);
+
+        power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
+        power_save_timer_->OnEnterSleepMode([this]() {
+            ESP_LOGI(TAG, "Enabling sleep mode");
+            display_->SetChatMessage("system", "");
+            display_->SetEmotion("sleepy");
+            GetBacklight()->SetBrightness(1);
+        });
+        power_save_timer_->OnExitSleepMode([this]() {
+            display_->SetChatMessage("system", "");
+            display_->SetEmotion("neutral");
+            GetBacklight()->RestoreBrightness();
+        });
+        power_save_timer_->OnShutdownRequest([this]() {
+            ESP_LOGI(TAG, "Shutting down");
+            rtc_gpio_set_level(GPIO_NUM_13, 0);
+            // 启用保持功能，确保睡眠期间电平不变
+            rtc_gpio_hold_en(GPIO_NUM_13);
+            esp_lcd_panel_disp_on_off(panel, false); //关闭显示
+            esp_deep_sleep_start();
+        });
+        power_save_timer_->SetEnabled(true);
+    }
 
 
     void InitializeSpi() {
@@ -101,6 +130,7 @@ private:
     void InitializeButtons() {
         
         boot_button_.OnClick([this]() {
+            power_save_timer_->WakeUp();
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() == kDeviceStateStarting && !WifiStation::GetInstance().IsConnected()) {
                 ResetWifiConfiguration();
@@ -109,6 +139,7 @@ private:
         });
 
         asr_button_.OnClick([this]() {
+            power_save_timer_->WakeUp();
             std::string wake_word="你好小智";
             Application::GetInstance().WakeWordInvoke(wake_word);
         });
@@ -128,6 +159,7 @@ public:
     ESP32_CGC_144() :
 	boot_button_(BOOT_BUTTON_GPIO), asr_button_(ASR_BUTTON_GPIO) {
         InitializePowerManager();
+        InitializePowerSaveTimer();
         InitializeSpi();
         InitializeSt7735Display();
         InitializeButtons();
@@ -163,6 +195,12 @@ public:
         return true;
     }
 
+    virtual void SetPowerSaveMode(bool enabled) override {
+        if (!enabled) {
+            power_save_timer_->WakeUp();
+        }
+        WifiBoard::SetPowerSaveMode(enabled);
+    }
 };
 
 DECLARE_BOARD(ESP32_CGC_144);
