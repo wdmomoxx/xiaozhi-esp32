@@ -76,8 +76,6 @@ static const ThemeColors LIGHT_THEME = {
 
 // Current theme - initialize based on default config
 static ThemeColors current_theme = LIGHT_THEME;
-// Add theme name variable to track current theme
-static std::string current_theme_name = "light";
 
 
 LV_FONT_DECLARE(font_awesome_30_4);
@@ -144,17 +142,11 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
         lv_display_set_offset(display_, offset_x, offset_y);
     }
 
-    // Load theme from settings
-    Settings settings("display", false);
-    std::string theme = settings.GetString("theme", "");
-    if (!theme.empty()) {
-        if (theme == "dark") {
-            current_theme = DARK_THEME;
-            current_theme_name = "dark";
-        } else if (theme == "light") {
-            current_theme = LIGHT_THEME;
-            current_theme_name = "light";
-        }
+    // Update the theme
+    if (current_theme_name_ == "dark") {
+        current_theme = DARK_THEME;
+    } else if (current_theme_name_ == "light") {
+        current_theme = LIGHT_THEME;
     }
 
     SetupUI();
@@ -221,17 +213,11 @@ RgbLcdDisplay::RgbLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
         lv_display_set_offset(display_, offset_x, offset_y);
     }
 
-    // Load theme from settings
-    Settings settings("display", false);
-    std::string theme = settings.GetString("theme", "");
-    if (!theme.empty()) {
-        if (theme == "dark") {
-            current_theme = DARK_THEME;
-            current_theme_name = "dark";
-        } else if (theme == "light") {
-            current_theme = LIGHT_THEME;
-            current_theme_name = "light";
-        }
+    // Update the theme
+    if (current_theme_name_ == "dark") {
+        current_theme = DARK_THEME;
+    } else if (current_theme_name_ == "light") {
+        current_theme = LIGHT_THEME;
     }
 
     SetupUI();
@@ -326,11 +312,15 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_pad_left(status_bar_, 2, 0);
     lv_obj_set_style_pad_right(status_bar_, 2, 0);
     lv_obj_set_scrollbar_mode(status_bar_, LV_SCROLLBAR_MODE_OFF);
+    // 设置状态栏的内容垂直居中
+    lv_obj_set_flex_align(status_bar_, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    network_label_ = lv_label_create(status_bar_);
-    lv_label_set_text(network_label_, "");
-    lv_obj_set_style_text_font(network_label_, fonts_.icon_font, 0);
-    lv_obj_set_style_text_color(network_label_, current_theme.text, 0);
+    // 创建emotion_label_在状态栏最左侧
+    emotion_label_ = lv_label_create(status_bar_);
+    lv_obj_set_style_text_font(emotion_label_, &font_awesome_30_4, 0);
+    lv_obj_set_style_text_color(emotion_label_, current_theme.text, 0);
+    lv_label_set_text(emotion_label_, FONT_AWESOME_AI_CHIP);
+    lv_obj_set_style_margin_right(emotion_label_, 5, 0); // 添加右边距，与后面的元素分隔
 
     notification_label_ = lv_label_create(status_bar_);
     lv_obj_set_flex_grow(notification_label_, 1);
@@ -351,17 +341,17 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_text_font(mute_label_, fonts_.icon_font, 0);
     lv_obj_set_style_text_color(mute_label_, current_theme.text, 0);
 
+    network_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(network_label_, "");
+    lv_obj_set_style_text_font(network_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_color(network_label_, current_theme.text, 0);
+    lv_obj_set_style_margin_left(network_label_, 5, 0); // 添加左边距，与前面的元素分隔
+
     battery_label_ = lv_label_create(status_bar_);
     lv_label_set_text(battery_label_, "");
     lv_obj_set_style_text_font(battery_label_, fonts_.icon_font, 0);
     lv_obj_set_style_text_color(battery_label_, current_theme.text, 0);
-
-    // 创建emotion_label_在状态栏最右侧
-    emotion_label_ = lv_label_create(status_bar_);
-    lv_obj_set_style_text_font(emotion_label_, &font_awesome_30_4, 0);
-    lv_obj_set_style_text_color(emotion_label_, current_theme.text, 0);
-    lv_label_set_text(emotion_label_, FONT_AWESOME_AI_CHIP);
-    lv_obj_set_style_margin_left(emotion_label_, 5, 0); // 添加左边距，与前面的元素分隔
+    lv_obj_set_style_margin_left(battery_label_, 5, 0); // 添加左边距，与前面的元素分隔
 
     low_battery_popup_ = lv_obj_create(screen);
     lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
@@ -460,7 +450,7 @@ void LcdDisplay::SetChatMessage(const char* role, const char* content) {
         lv_obj_set_height(msg_bubble, LV_SIZE_CONTENT);
         
         // Add some margin
-        lv_obj_set_style_margin_left(msg_bubble, 0, 0);
+        lv_obj_set_style_margin_left(msg_bubble, -4, 0);
         
         // Don't grow
         lv_obj_set_style_flex_grow(msg_bubble, 0, 0);
@@ -707,21 +697,15 @@ void LcdDisplay::SetIcon(const char* icon) {
 void LcdDisplay::SetTheme(const std::string& theme_name) {
     DisplayLockGuard lock(this);
     
-    // Update the current theme based on the theme name
     if (theme_name == "dark" || theme_name == "DARK") {
         current_theme = DARK_THEME;
-        current_theme_name = "dark";
     } else if (theme_name == "light" || theme_name == "LIGHT") {
         current_theme = LIGHT_THEME;
-        current_theme_name = "light";
     } else {
         // Invalid theme name, return false
+        ESP_LOGE(TAG, "Invalid theme name: %s", theme_name.c_str());
         return;
     }
-    
-    // Save theme to settings
-    Settings settings("display", true);
-    settings.SetString("theme", current_theme_name);
     
     // Get the active screen
     lv_obj_t* screen = lv_screen_active();
@@ -898,17 +882,7 @@ void LcdDisplay::SetTheme(const std::string& theme_name) {
     if (low_battery_popup_ != nullptr) {
         lv_obj_set_style_bg_color(low_battery_popup_, current_theme.low_battery, 0);
     }
-}
 
-std::string LcdDisplay::GetTheme() {
-    // First try to read from settings
-    Settings settings("display", false);
-    std::string theme = settings.GetString("theme", "light");
-    
-    // If theme is not set in settings, return the current theme
-    if (theme.empty()) {
-        return current_theme_name;
-    }
-    
-    return theme;
+    // No errors occurred. Save theme to settings
+    Display::SetTheme(theme_name);
 }
