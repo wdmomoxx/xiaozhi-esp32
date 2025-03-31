@@ -17,11 +17,11 @@
 #include <driver/spi_common.h>
 
 #if defined(LCD_TYPE_ILI9341_SERIAL)
-#include <esp_lcd_ili9341.h>
+#include "esp_lcd_ili9341.h"
 #endif
 
 #if defined(LCD_TYPE_GC9A01_SERIAL)
-#include <esp_lcd_gc9a01.h>
+#include "esp_lcd_gc9a01.h"
 static const gc9a01_lcd_init_cmd_t gc9107_lcd_init_cmds[] = {
     //  {cmd, { data }, data_size, delay_ms}
     {0xfe, (uint8_t[]){0x00}, 0, 0},
@@ -64,6 +64,7 @@ LV_FONT_DECLARE(font_awesome_14_1);
 
 class ESP32_CGC : public WifiBoard {
 private:
+ 
     Button boot_button_;
     LcdDisplay* display_;
     Button asr_button_;
@@ -155,6 +156,7 @@ private:
         auto& thing_manager = iot::ThingManager::GetInstance();
         thing_manager.AddThing(iot::CreateThing("Speaker"));
         thing_manager.AddThing(iot::CreateThing("Screen"));
+        thing_manager.AddThing(iot::CreateThing("Lamp"));
     }
 
 public:
