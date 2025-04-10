@@ -9,7 +9,6 @@
 #include "iot/thing_manager.h"
 #include "led/single_led.h"
 #include "assets/lang_config.h"
-#include "power_manager.h"
 
 #include <wifi_station.h>
 #include <esp_log.h>
@@ -19,7 +18,14 @@
 #include <driver/spi_common.h>
 
 #include <esp_sleep.h>
- 
+
+#if defined(ESP32_CGC_144_lite)
+#include "power_manager_lite.h"
+#else
+#include "power_manager.h"
+#endif
+
+
 #define TAG "ESP32_CGC_144"
 
 LV_FONT_DECLARE(font_puhui_14_1);
@@ -35,16 +41,29 @@ private:
     esp_lcd_panel_io_handle_t panel_io = nullptr;
     esp_lcd_panel_handle_t panel = nullptr;
 
-    void InitializePowerManager() {
-        power_manager_ = new PowerManager(GPIO_NUM_36);
-        power_manager_->OnChargingStatusChanged([this](bool is_charging) {
-            if (is_charging) {
-                power_save_timer_->SetEnabled(false);
-            } else {
-                power_save_timer_->SetEnabled(true);
-            }
-        });
-    }
+#if defined(ESP32_CGC_144_lite)
+void InitializePowerManager() {
+    power_manager_ = new PowerManager(GPIO_NUM_NC);
+    power_manager_->OnChargingStatusChanged([this](bool is_charging) {
+        if (is_charging) {
+            power_save_timer_->SetEnabled(false);
+        } else {
+            power_save_timer_->SetEnabled(true);
+        }
+    });
+}
+#else
+void InitializePowerManager() {
+    power_manager_ = new PowerManager(GPIO_NUM_36);
+    power_manager_->OnChargingStatusChanged([this](bool is_charging) {
+        if (is_charging) {
+            power_save_timer_->SetEnabled(false);
+        } else {
+            power_save_timer_->SetEnabled(true);
+        }
+    });
+}
+#endif
 
     void InitializePowerSaveTimer() {
         power_save_timer_ = new PowerSaveTimer(-1, 60);
