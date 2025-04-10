@@ -3,6 +3,8 @@
 
 #include <driver/gpio.h>
 
+//#define ESP32_CGC_144_lite
+
 #define AUDIO_INPUT_SAMPLE_RATE  16000
 #define AUDIO_OUTPUT_SAMPLE_RATE 24000
 
