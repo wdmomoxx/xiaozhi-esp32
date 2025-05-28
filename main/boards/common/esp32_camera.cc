@@ -30,13 +30,34 @@ Esp32Camera::Esp32Camera(const camera_config_t& config) {
     preview_image_.header.cf = LV_COLOR_FORMAT_RGB565;
     preview_image_.header.flags = LV_IMAGE_FLAGS_ALLOCATED | LV_IMAGE_FLAGS_MODIFIABLE;
 
-    if (config.frame_size == FRAMESIZE_VGA) {
-        preview_image_.header.w = 640;
-        preview_image_.header.h = 480;
-    } else if (config.frame_size == FRAMESIZE_QVGA) {
-        preview_image_.header.w = 320;
-        preview_image_.header.h = 240;
+    switch (config.frame_size) {
+        case FRAMESIZE_SVGA:
+            preview_image_.header.w = 800;
+            preview_image_.header.h = 600;
+            break;
+        case FRAMESIZE_VGA:
+            preview_image_.header.w = 640;
+            preview_image_.header.h = 480;
+            break;
+        case FRAMESIZE_QVGA:
+            preview_image_.header.w = 320;
+            preview_image_.header.h = 240;
+            break;
+        case FRAMESIZE_128X128:
+            preview_image_.header.w = 128;
+            preview_image_.header.h = 128;
+            break;
+        case FRAMESIZE_240X240:
+            preview_image_.header.w = 240;
+            preview_image_.header.h = 240;
+            break;
+        default:
+            ESP_LOGE(TAG, "Unsupported frame size: %d, image preview will not be shown", config.frame_size);
+            preview_image_.data_size = 0;
+            preview_image_.data = nullptr;
+            return;
     }
+
     preview_image_.header.stride = preview_image_.header.w * 2;
     preview_image_.data_size = preview_image_.header.w * preview_image_.header.h * 2;
     preview_image_.data = (uint8_t*)heap_caps_malloc(preview_image_.data_size, MALLOC_CAP_SPIRAM);
@@ -64,9 +85,6 @@ void Esp32Camera::SetExplainUrl(const std::string& url, const std::string& token
 }
 
 bool Esp32Camera::Capture() {
-    if (preview_thread_.joinable()) {
-        preview_thread_.join();
-    }
     if (encoder_thread_.joinable()) {
         encoder_thread_.join();
     }
@@ -84,20 +102,61 @@ bool Esp32Camera::Capture() {
         }
     }
 
-    preview_thread_ = std::thread([this]() {
-        // 显示预览图片
-        auto display = Board::GetInstance().GetDisplay();
-        if (display != nullptr) {
-            auto src = (uint16_t*)fb_->buf;
-            auto dst = (uint16_t*)preview_image_.data;
-            size_t pixel_count = fb_->len / 2;
-            for (size_t i = 0; i < pixel_count; i++) {
-                // 交换每个16位字内的字节
-                dst[i] = __builtin_bswap16(src[i]);
-            }
-            display->SetPreviewImage(&preview_image_);
+    // 如果预览图片 buffer 为空，则跳过预览
+    // 但仍返回 true，因为此时图像可以上传至服务器
+    if (preview_image_.data_size == 0) {
+        ESP_LOGW(TAG, "Skip preview because of unsupported frame size");
+        return true;
+    }
+    if (preview_image_.data == nullptr) {
+        ESP_LOGE(TAG, "Preview image data is not initialized");
+        return true;
+    }
+    // 显示预览图片
+    auto display = Board::GetInstance().GetDisplay();
+    if (display != nullptr) {
+        auto src = (uint16_t*)fb_->buf;
+        auto dst = (uint16_t*)preview_image_.data;
+        size_t pixel_count = fb_->len / 2;
+        for (size_t i = 0; i < pixel_count; i++) {
+            // 交换每个16位字内的字节
+            dst[i] = __builtin_bswap16(src[i]);
         }
-    });
+        display->SetPreviewImage(&preview_image_);
+    }
+    return true;
+}
+bool Esp32Camera::SetHMirror(bool enabled) {
+    sensor_t *s = esp_camera_sensor_get();
+    if (s == nullptr) {
+        ESP_LOGE(TAG, "Failed to get camera sensor");
+        return false;
+    }
+    
+    esp_err_t err = s->set_hmirror(s, enabled);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set horizontal mirror: %d", err);
+        return false;
+    }
+    
+    ESP_LOGI(TAG, "Camera horizontal mirror set to: %s", enabled ? "enabled" : "disabled");
+    return true;
+}
+
+bool Esp32Camera::SetVFlip(bool enabled) {
+    sensor_t *s = esp_camera_sensor_get();
+    if (s == nullptr) {
+        ESP_LOGE(TAG, "Failed to get camera sensor");
+        return false;
+    }
+    
+    esp_err_t err = s->set_vflip(s, enabled);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set vertical flip: %d", err);
+        return false;
+    }
+    
+    ESP_LOGI(TAG, "Camera vertical flip set to: %s", enabled ? "enabled" : "disabled");
     return true;
 }
 
@@ -109,7 +168,7 @@ bool Esp32Camera::Capture() {
  * 问题对图像进行AI分析并返回结果。
  * 
  * 实现特点：
- * - 使用多线程异步JPEG编码，避免阻塞主线程
+ * - 使用独立线程编码JPEG，与主线程分离
  * - 采用分块传输编码(chunked transfer encoding)优化内存使用
  * - 通过队列机制实现编码线程和发送线程的数据同步
  * - 支持设备ID、客户端ID和认证令牌的HTTP头部配置
@@ -141,7 +200,7 @@ std::string Esp32Camera::Explain(const std::string& question) {
         frame2jpg_cb(fb_, 80, [](void* arg, size_t index, const void* data, size_t len) -> unsigned int {
             auto jpeg_queue = (QueueHandle_t)arg;
             JpegChunk chunk = {
-                .data = (uint8_t*)heap_caps_malloc(len, MALLOC_CAP_SPIRAM),
+                .data = (uint8_t*)heap_caps_aligned_alloc(16, len, MALLOC_CAP_SPIRAM),
                 .len = len
             };
             memcpy(chunk.data, data, len);
