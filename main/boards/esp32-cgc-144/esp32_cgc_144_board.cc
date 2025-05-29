@@ -6,6 +6,8 @@
 #include "button.h"
 #include "config.h"
 #include "power_save_timer.h"
+#include "mcp_server.h"
+#include "lamp_controller.h"
 #include "iot/thing_manager.h"
 #include "led/single_led.h"
 #include "assets/lang_config.h"
@@ -128,7 +130,7 @@ void InitializePowerManager() {
                                     {
                                         .text_font = &font_puhui_14_1,
                                         .icon_font = &font_awesome_14_1,
-                                        .emoji_font = font_emoji_84_init(),
+                                        .emoji_font = font_emoji_32_init(),
                                     });
     }
 
@@ -156,11 +158,15 @@ void InitializePowerManager() {
 
     // 物联网初始化，添加对 AI 可见设备
     void InitializeIot() {
+#if CONFIG_IOT_PROTOCOL_XIAOZHI
         auto& thing_manager = iot::ThingManager::GetInstance();
         thing_manager.AddThing(iot::CreateThing("Screen"));
         thing_manager.AddThing(iot::CreateThing("BoardControl"));
         thing_manager.AddThing(iot::CreateThing("Battery"));
         thing_manager.AddThing(iot::CreateThing("Lamp"));
+#elif CONFIG_IOT_PROTOCOL_MCP
+        static LampController lamp(LAMP_GPIO);
+#endif
     }
 
 public:
