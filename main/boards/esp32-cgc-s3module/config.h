@@ -20,6 +20,10 @@
 #define BUILTIN_LED_GPIO        GPIO_NUM_48
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
 
+// A MCP Test: Control a lamp
+#define LAMP_GPIO 				GPIO_NUM_NC
+
+
 #define DISPLAY_OFFSET_X 0
 #define DISPLAY_OFFSET_Y 0
 #define DISPLAY_WIDTH    240
