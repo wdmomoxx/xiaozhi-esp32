@@ -1,0 +1,13 @@
+{
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "esp32-cgc-s3touch",
+            "sdkconfig_append": [
+                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y",
+                "CONFIG_ESP_CONSOLE_SECONDARY_NONE=y",
+                "CONFIG_USE_WECHAT_MESSAGE_STYLE=y"
+            ]
+        }
+    ]
+}
