@@ -94,6 +94,9 @@ choice BOARD_TYPE
     config BOARD_TYPE_ESP32_CGC_S3Touch
         bool "ESP32 CGC S3Touch"
         depends on IDF_TARGET_ESP32S3
+    config BOARD_TYPE_ESP32_CGC_SUC3Module
+        bool "ESP32 CGC SuperMIni C3模块"
+        depends on IDF_TARGET_ESP32C3
     config BOARD_TYPE_KEVIN_YUYING_313LCD
         bool "鱼鹰科技3.13LCD开发板"
         depends on IDF_TARGET_ESP32S3
