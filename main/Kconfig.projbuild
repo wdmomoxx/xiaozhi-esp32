@@ -166,6 +166,9 @@ choice BOARD_TYPE
     config BOARD_TYPE_ESP32C6_LCD_1_69
         bool "Waveshare ESP32-C6-LCD-1.69"
         depends on IDF_TARGET_ESP32C6
+    config BOARD_TYPE_ESP32C6_Touch_AMOLED_1_43
+        bool "Waveshare ESP32-C6-Touch-AMOLOED-1.43"
+        depends on IDF_TARGET_ESP32C6
     config BOARD_TYPE_ESP32S3_Touch_LCD_3_5
         bool "Waveshare ESP32-S3-Touch-LCD-3.5"
         depends on IDF_TARGET_ESP32S3
@@ -286,6 +289,9 @@ choice BOARD_TYPE
         select LV_GIF_CACHE_DECODE_DATA
     config BOARD_TYPE_JIUCHUAN
         bool "九川智能"
+    config BOARD_TYPE_SURFER_C3_1_14TFT
+        bool "Surfer-C3-1-14TFT"
+        depends on IDF_TARGET_ESP32C3
 endchoice
 
 choice ESP_S3_LCD_EV_Board_Version_TYPE
