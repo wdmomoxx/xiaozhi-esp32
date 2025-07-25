@@ -1,5 +1,5 @@
 #include "wifi_board.h"
-#include "audio_codecs/es8311_audio_codec.h"
+#include "codecs/es8311_audio_codec.h"
 #include "display/lcd_display.h"
 #include "application.h"
 #include "button.h"
@@ -8,7 +8,6 @@
 #include "power_save_timer.h"
 #include "mcp_server.h"
 #include "lamp_controller.h"
-#include "iot/thing_manager.h"
 #include "assets/lang_config.h"
 
 #include <wifi_station.h>
@@ -348,13 +347,6 @@ private:
     }
 
 
-    // 物联网初始化，添加对 AI 可见设备
-    void InitializeIot() {
-        auto& thing_manager = iot::ThingManager::GetInstance();
-        thing_manager.AddThing(iot::CreateThing("Speaker"));
-        thing_manager.AddThing(iot::CreateThing("Screen"));
-    }
-
 public:
     ESP32_CGC_S3Touch() :
 	boot_button_(BOOT_BUTTON_GPIO) {
@@ -366,7 +358,6 @@ public:
         InitializeST7789_80_Display();
         InitializeTouch();
         InitializeButtons();
-        InitializeIot();
         GetBacklight()->RestoreBrightness();
     }
 
