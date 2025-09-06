@@ -7,6 +7,8 @@
 #include "websocket_protocol.h"
 #include "assets/lang_config.h"
 #include "mcp_server.h"
+#include "assets.h"
+#include "settings.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -49,7 +51,7 @@ Application::Application() {
     esp_timer_create_args_t clock_timer_args = {
         .callback = [](void* arg) {
             Application* app = (Application*)arg;
-            app->OnClockTimer();
+            xEventGroupSetBits(app->event_group_, MAIN_EVENT_CLOCK_TICK);
         },
         .arg = this,
         .dispatch_method = ESP_TIMER_TASK,
@@ -65,6 +67,65 @@ Application::~Application() {
         esp_timer_delete(clock_timer_handle_);
     }
     vEventGroupDelete(event_group_);
+}
+
+void Application::CheckAssetsVersion() {
+    auto& board = Board::GetInstance();
+    auto display = board.GetDisplay();
+    auto assets = board.GetAssets();
+    if (!assets) {
+        ESP_LOGE(TAG, "Assets is not set for board %s", BOARD_NAME);
+        return;
+    }
+
+    if (!assets->partition_valid()) {
+        ESP_LOGE(TAG, "Assets partition is not valid for board %s", BOARD_NAME);
+        return;
+    }
+    
+    Settings settings("assets", true);
+    // Check if there is a new assets need to be downloaded
+    std::string download_url = settings.GetString("download_url");
+    if (!download_url.empty()) {
+        settings.EraseKey("download_url");
+    }
+    if (download_url.empty() && !assets->checksum_valid()) {
+        download_url = assets->default_assets_url();
+    }
+
+    if (!download_url.empty()) {
+        char message[256];
+        snprintf(message, sizeof(message), Lang::Strings::FOUND_NEW_ASSETS, download_url.c_str());
+        Alert(Lang::Strings::LOADING_ASSETS, message, "cloud_arrow_down", Lang::Sounds::OGG_UPGRADE);
+        
+        // Wait for the audio service to be idle for 3 seconds
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        SetDeviceState(kDeviceStateUpgrading);
+        board.SetPowerSaveMode(false);
+        display->SetChatMessage("system", Lang::Strings::PLEASE_WAIT);
+
+        bool success = assets->Download(download_url, [display](int progress, size_t speed) -> void {
+            std::thread([display, progress, speed]() {
+                char buffer[32];
+                snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, speed / 1024);
+                display->SetChatMessage("system", buffer);
+            }).detach();
+        });
+
+        board.SetPowerSaveMode(true);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        if (!success) {
+            Alert(Lang::Strings::ERROR, Lang::Strings::DOWNLOAD_ASSETS_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            return;
+        }
+    }
+
+    // Apply assets
+    assets->Apply();
+    display->SetChatMessage("system", "");
+    display->SetEmotion("microchip_ai");
 }
 
 void Application::CheckNewVersion(Ota& ota) {
@@ -358,6 +419,9 @@ void Application::Start() {
     // Update the status bar immediately to show the network state
     display->UpdateStatusBar(true);
 
+    // Check for new assets version
+    CheckAssetsVersion();
+
     // Check for new firmware version or get the MQTT broker address
     Ota ota;
     CheckNewVersion(ota);
@@ -366,7 +430,9 @@ void Application::Start() {
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
 
     // Add MCP common tools before initializing the protocol
-    McpServer::GetInstance().AddCommonTools();
+    auto& mcp_server = McpServer::GetInstance();
+    mcp_server.AddCommonTools();
+    mcp_server.AddUserOnlyTools();
 
     if (ota.HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
@@ -496,6 +562,7 @@ void Application::Start() {
     });
     bool protocol_started = protocol_->Start();
 
+    SystemInfo::PrintHeapStats();
     SetDeviceState(kDeviceStateIdle);
 
     has_server_time_ = ota.HasServerTime();
@@ -505,23 +572,6 @@ void Application::Start() {
         display->SetChatMessage("system", "");
         // Play the success sound to indicate the device is ready
         audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
-    }
-
-    // Print heap stats
-    SystemInfo::PrintHeapStats();
-}
-
-void Application::OnClockTimer() {
-    clock_ticks_++;
-
-    auto display = Board::GetInstance().GetDisplay();
-    display->UpdateStatusBar();
-
-    // Print the debug info every 10 seconds
-    if (clock_ticks_ % 10 == 0) {
-        // SystemInfo::PrintTaskCpuUsage(pdMS_TO_TICKS(1000));
-        // SystemInfo::PrintTaskList();
-        SystemInfo::PrintHeapStats();
     }
 }
 
@@ -546,7 +596,9 @@ void Application::MainEventLoop() {
             MAIN_EVENT_SEND_AUDIO |
             MAIN_EVENT_WAKE_WORD_DETECTED |
             MAIN_EVENT_VAD_CHANGE |
+            MAIN_EVENT_CLOCK_TICK |
             MAIN_EVENT_ERROR, pdTRUE, pdFALSE, portMAX_DELAY);
+
         if (bits & MAIN_EVENT_ERROR) {
             SetDeviceState(kDeviceStateIdle);
             Alert(Lang::Strings::ERROR, last_error_message_.c_str(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
@@ -554,7 +606,7 @@ void Application::MainEventLoop() {
 
         if (bits & MAIN_EVENT_SEND_AUDIO) {
             while (auto packet = audio_service_.PopPacketFromSendQueue()) {
-                if (!protocol_->SendAudio(std::move(packet))) {
+                if (protocol_ && !protocol_->SendAudio(std::move(packet))) {
                     break;
                 }
             }
@@ -577,6 +629,19 @@ void Application::MainEventLoop() {
             lock.unlock();
             for (auto& task : tasks) {
                 task();
+            }
+        }
+
+        if (bits & MAIN_EVENT_CLOCK_TICK) {
+            clock_ticks_++;
+            auto display = Board::GetInstance().GetDisplay();
+            display->UpdateStatusBar();
+        
+            // Print the debug info every 10 seconds
+            if (clock_ticks_ % 10 == 0) {
+                // SystemInfo::PrintTaskCpuUsage(pdMS_TO_TICKS(1000));
+                // SystemInfo::PrintTaskList();
+                SystemInfo::PrintHeapStats();
             }
         }
     }
@@ -623,7 +688,9 @@ void Application::OnWakeWordDetected() {
 void Application::AbortSpeaking(AbortReason reason) {
     ESP_LOGI(TAG, "Abort speaking");
     aborted_ = true;
-    protocol_->SendAbortSpeaking(reason);
+    if (protocol_) {
+        protocol_->SendAbortSpeaking(reason);
+    }
 }
 
 void Application::SetListeningMode(ListeningMode mode) {
@@ -695,6 +762,12 @@ void Application::SetDeviceState(DeviceState state) {
 
 void Application::Reboot() {
     ESP_LOGI(TAG, "Rebooting...");
+    // Disconnect the audio channel
+    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+        protocol_->CloseAudioChannel();
+    }
+    protocol_.reset();
+    audio_service_.Stop();
     esp_restart();
 }
 
