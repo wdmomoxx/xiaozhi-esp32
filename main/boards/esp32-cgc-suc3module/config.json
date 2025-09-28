@@ -1,0 +1,17 @@
+{
+    "target": "esp32c3",
+    "builds": [
+        {
+            "name": "esp32-cgc-suc3module",
+            "sdkconfig_append": [
+                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y",
+                "CONFIG_ESP_CONSOLE_SECONDARY_NONE=y",
+                "CONFIG_ESPTOOLPY_FLASHFREQ_40M=y",
+                "CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y",
+                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/4m.csv\"",
+                "CONFIG_USE_ESP_WAKE_WORD=y",
+                "CONFIG_ESP_PHY_MAX_WIFI_TX_POWER=10"
+            ]
+        }
+    ]
+}
