@@ -27,7 +27,7 @@ private:
 
     void CheckBatteryStatus() {
         // Get charging status
-        bool new_charging_status = gpio_get_level(charging_pin_) == 1;
+        bool new_charging_status = gpio_get_level(charging_pin_) == 0;
         if (new_charging_status != is_charging_) {
             is_charging_ = new_charging_status;
             if (on_charging_status_changed_) {
