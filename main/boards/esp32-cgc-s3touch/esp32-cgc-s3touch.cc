@@ -38,7 +38,7 @@ private:
     esp_lcd_panel_handle_t panel = nullptr;
 	
     void InitializePowerManager() {
-        power_manager_ = new PowerManager(GPIO_NUM_NC);
+        power_manager_ = new PowerManager(GPIO_NUM_10);
         power_manager_->OnChargingStatusChanged([this](bool is_charging) {
             if (is_charging) {
                 power_save_timer_->SetEnabled(false);
@@ -82,26 +82,6 @@ private:
         ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_cfg, &codec_i2c_bus_));
     }
 
-    void I2cDetect() {
-        uint8_t address;
-        printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\r\n");
-        for (int i = 0; i < 128; i += 16) {
-            printf("%02x: ", i);
-            for (int j = 0; j < 16; j++) {
-                fflush(stdout);
-                address = i + j;
-                esp_err_t ret = i2c_master_probe(codec_i2c_bus_, address, pdMS_TO_TICKS(200));
-                if (ret == ESP_OK) {
-                    printf("%02x ", address);
-                } else if (ret == ESP_ERR_TIMEOUT) {
-                    printf("UU ");
-                } else {
-                    printf("-- ");
-                }
-            }
-            printf("\r\n");
-        }
-    }
 
     void InitializeST7789_80_Display() {
         esp_lcd_i80_bus_handle_t i80_bus = NULL;
@@ -234,7 +214,6 @@ public:
 	    InitializePowerManager();
         InitializePowerSaveTimer();
         InitializeCodecI2c();
-        I2cDetect();
         InitializeST7789_80_Display();
         InitializeTouch();
         InitializeButtons();
