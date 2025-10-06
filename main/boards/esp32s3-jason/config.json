@@ -1,0 +1,14 @@
+{
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "esp32s3-jason",
+            "sdkconfig_append": [
+                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y",
+                "CONFIG_ESP_CONSOLE_SECONDARY_NONE=y",
+                "CONFIG_USE_DEVICE_AEC=y",
+                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/16m.csv\""
+            ]
+        }
+    ]
+}
