@@ -4,6 +4,7 @@
         {
             "name": "esp32-cgc-s3module",
             "sdkconfig_append": [
+                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/16m.csv\"",
                 "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y",
                 "CONFIG_ESP_CONSOLE_SECONDARY_NONE=y"
             ]
