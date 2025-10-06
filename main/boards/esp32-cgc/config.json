@@ -4,6 +4,7 @@
         {
             "name": "esp32-cgc",
             "sdkconfig_append": [
+                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/4m.csv\"",
                 "CONFIG_LCD_ST7735_128X128=y"
             ]
         }
