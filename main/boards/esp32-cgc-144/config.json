@@ -4,6 +4,7 @@
         {
             "name": "esp32-cgc-144",
             "sdkconfig_append": [
+               "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/4m.csv\""
             ]
         }
     ]
